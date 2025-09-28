@@ -1,8 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm install:*)",
-      "Bash(npm run dev:*)"
+      "Read(//d/software/desk/Umi-OCR_Paddle_v2.1.5/**)"
     ],
     "deny": [],
     "ask": []
