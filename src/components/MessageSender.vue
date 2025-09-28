@@ -166,10 +166,39 @@
 
     <!-- 消息编辑 -->
     <div class="message-section">
-      <h4 class="section-title">
-        <el-icon><ChatDotRound /></el-icon>
-        消息内容
-      </h4>
+      <div class="message-header">
+        <h4 class="section-title">
+          <el-icon><ChatDotRound /></el-icon>
+          消息内容
+        </h4>
+        <div class="preset-actions">
+          <el-dropdown @command="handlePresetCommand">
+            <el-button size="small" type="primary" text>
+              预设话术 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="save">保存当前话术</el-dropdown-item>
+                <el-dropdown-item command="manage" v-if="messagePresets.length > 0">管理预设</el-dropdown-item>
+                <el-dropdown-item disabled v-if="messagePresets.length === 0">暂无预设</el-dropdown-item>
+                <template v-if="messagePresets.length > 0">
+                  <el-dropdown-item divided disabled>选择预设:</el-dropdown-item>
+                  <el-dropdown-item
+                    v-for="preset in messagePresets.slice(0, 5)"
+                    :key="preset.id"
+                    :command="`load:${preset.id}`"
+                  >
+                    {{ preset.name }}
+                  </el-dropdown-item>
+                  <el-dropdown-item command="manage" v-if="messagePresets.length > 5">
+                    查看更多...
+                  </el-dropdown-item>
+                </template>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
+      </div>
 
       <el-input
         :model-value="messageContent"
@@ -355,11 +384,81 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 预设管理对话框 -->
+    <el-dialog
+      v-model="presetDialogVisible"
+      title="预设话术管理"
+      width="600px"
+      :close-on-click-modal="false"
+    >
+      <div class="preset-manager">
+        <div class="preset-list">
+          <el-empty v-if="messagePresets.length === 0" description="暂无预设话术" />
+          <div v-else class="preset-items">
+            <div
+              v-for="preset in messagePresets"
+              :key="preset.id"
+              class="preset-item"
+            >
+              <div class="preset-info">
+                <div class="preset-name">{{ preset.name }}</div>
+                <div class="preset-content">{{ preset.content.substring(0, 50) }}{{ preset.content.length > 50 ? '...' : '' }}</div>
+                <div class="preset-meta">
+                  <span class="usage-count">使用 {{ preset.usageCount }} 次</span>
+                  <span class="created-date">{{ formatDate(preset.createdAt) }}</span>
+                </div>
+              </div>
+              <div class="preset-actions">
+                <el-button size="small" @click="loadPreset(preset.id)">使用</el-button>
+                <el-button size="small" type="danger" @click="deletePreset(preset.id)">删除</el-button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="presetDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 保存预设对话框 -->
+    <el-dialog
+      v-model="savePresetDialogVisible"
+      title="保存话术预设"
+      width="400px"
+      :close-on-click-modal="false"
+    >
+      <el-form @submit.prevent="savePreset">
+        <el-form-item label="预设名称" required>
+          <el-input
+            v-model="presetNameInput"
+            placeholder="请输入预设名称..."
+            maxlength="20"
+            show-word-limit
+            @keyup.enter="savePreset"
+          />
+        </el-form-item>
+        <el-form-item label="话术内容">
+          <el-input
+            :model-value="messageContent"
+            type="textarea"
+            :rows="3"
+            readonly
+            placeholder="当前消息内容将被保存"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="savePresetDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="savePreset" :disabled="!presetNameInput.trim()">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   UserFilled,
@@ -368,10 +467,12 @@ import {
   ChatDotRound,
   View,
   ArrowLeft,
+  ArrowDown,
   Position,
   SuccessFilled,
   CircleCloseFilled
 } from '@element-plus/icons-vue'
+import { useAppStore } from '@/stores/app'
 
 const props = defineProps({
   selectedContacts: {
@@ -399,6 +500,9 @@ const emit = defineEmits([
   'send'
 ])
 
+// Store实例
+const appStore = useAppStore()
+
 // 响应式数据
 const activeTab = ref('all')
 const sendImmediately = ref(true)
@@ -406,6 +510,9 @@ const groupMessageMode = ref('at') // 'at' 或 'normal'
 const selectedGroups = ref([]) // 普通群消息模式下选中的群
 const confirmBeforeSend = ref(false)
 const resultDialogVisible = ref(false)
+const presetDialogVisible = ref(false)
+const savePresetDialogVisible = ref(false)
+const presetNameInput = ref('')
 const sendResults = ref(null)
 const activeResultTab = ref(['success', 'failure'])
 
@@ -447,6 +554,11 @@ const canSend = computed(() => {
 // 获取可用的群列表（用于普通群消息模式）
 const availableGroups = computed(() => {
   return props.groups || []
+})
+
+// 预设相关计算属性
+const messagePresets = computed(() => {
+  return appStore.messagePresets || []
 })
 
 const successResults = computed(() => {
@@ -540,30 +652,53 @@ const handleSend = async () => {
 
   try {
     const result = await emit('send')
-    showSendResults(result)
+    if (result) {
+      showSendResults(result)
+    } else {
+      ElMessage.error('发送操作未返回结果')
+    }
   } catch (error) {
     ElMessage.error(`发送失败: ${error.message}`)
+    // 发送失败时不调用showSendResults
   }
 }
 
 const showSendResults = (results) => {
   sendResults.value = results
-  resultDialogVisible.value = true
 
-  if (results.failure === 0) {
-    ElMessage.success('所有消息发送成功！')
-  } else if (results.success === 0) {
+  // 安全检查：确保results对象存在且包含必要字段
+  if (!results || typeof results !== 'object') {
+    ElMessage.error('发送结果数据无效')
+    return
+  }
+
+  const success = results.success || 0
+  const failure = results.failure || 0
+  const total = results.total || success + failure
+
+  if (failure === 0) {
+    // 全部发送成功：只显示成功提示，不显示对话框
+    ElMessage.success(`返回等待结果中，成功发送 ${success} 条消息`)
+    // 直接触发成功回调
+    emit('success')
+  } else if (success === 0) {
+    // 全部发送失败：显示错误提示和结果对话框
     ElMessage.error('所有消息发送失败！')
+    resultDialogVisible.value = true
   } else {
-    ElMessage.warning(`部分消息发送失败，成功 ${results.success} 条，失败 ${results.failure} 条`)
+    // 部分失败：显示警告提示和结果对话框
+    ElMessage.warning(`部分消息发送失败，成功 ${success} 条，失败 ${failure} 条`)
+    resultDialogVisible.value = true
   }
 }
 
 const handleResultClose = () => {
   resultDialogVisible.value = false
-  if (sendResults.value?.failure === 0) {
-    // 全部发送成功，可以重置状态或跳转
-    emit('success')
+  // 只有在部分失败的情况下，关闭对话框时检查是否需要触发成功回调
+  // 全部成功的情况下已经在showSendResults中直接触发了
+  if (sendResults.value?.failure > 0 && sendResults.value?.success > 0) {
+    // 部分失败情况下，用户可能修复了问题，这里不自动触发success
+    // 让用户决定是否继续或重新开始
   }
 }
 
@@ -579,6 +714,76 @@ const retryFailedMessages = () => {
   resultDialogVisible.value = false
   ElMessage.info('已准备重试失败的消息')
 }
+
+// 预设管理方法
+const handlePresetCommand = (command) => {
+  if (command === 'save') {
+    if (!props.messageContent.trim()) {
+      ElMessage.warning('请先输入消息内容')
+      return
+    }
+    presetNameInput.value = ''
+    savePresetDialogVisible.value = true
+  } else if (command === 'manage') {
+    presetDialogVisible.value = true
+  } else if (command.startsWith('load:')) {
+    const presetId = command.substring(5)
+    loadPreset(presetId)
+  }
+}
+
+const savePreset = async () => {
+  const name = presetNameInput.value.trim()
+  if (!name) {
+    ElMessage.warning('请输入预设名称')
+    return
+  }
+
+  try {
+    await appStore.saveMessagePreset(name, props.messageContent)
+    ElMessage.success('预设保存成功')
+    savePresetDialogVisible.value = false
+    presetNameInput.value = ''
+  } catch (error) {
+    ElMessage.error(error.message)
+  }
+}
+
+const loadPreset = async (presetId) => {
+  try {
+    const preset = await appStore.loadMessagePreset(presetId)
+    emit('update:messageContent', preset.content)
+    ElMessage.success(`已加载预设: ${preset.name}`)
+    presetDialogVisible.value = false
+  } catch (error) {
+    ElMessage.error(error.message)
+  }
+}
+
+const deletePreset = async (presetId) => {
+  try {
+    await ElMessageBox.confirm('确定要删除这个预设吗？', '确认删除', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+
+    appStore.deleteMessagePreset(presetId)
+    ElMessage.success('预设已删除')
+  } catch {
+    // 用户取消
+  }
+}
+
+const formatDate = (date) => {
+  const d = new Date(date)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// 组件挂载时加载预设
+onMounted(() => {
+  appStore.loadPresetsFromStorage()
+})
 
 // 暴露方法
 defineExpose({
@@ -948,5 +1153,91 @@ defineExpose({
 .group-info .group-stats {
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+/* 预设管理样式 */
+.message-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.preset-actions {
+  flex-shrink: 0;
+}
+
+.preset-manager {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.preset-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.preset-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  background: var(--white);
+}
+
+.preset-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.preset-name {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.preset-content {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-bottom: 8px;
+  word-break: break-word;
+}
+
+.preset-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.preset-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .message-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .preset-item {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .preset-actions {
+    align-self: stretch;
+  }
+
+  .preset-actions .el-button {
+    flex: 1;
+  }
 }
 </style>

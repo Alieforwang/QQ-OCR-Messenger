@@ -117,6 +117,16 @@ export function createNapCatResponse(status = 'ok', retcode = 0, data = null, me
   }
 }
 
+export function createMessagePreset(id = '', name = '', content = '', createdAt = new Date()) {
+  return {
+    id,
+    name,
+    content,
+    createdAt,
+    usageCount: 0
+  }
+}
+
 export function createAppState() {
   return {
     step: STEPS.UPLOAD,
@@ -129,6 +139,7 @@ export function createAppState() {
     groupMembers: {},
     matchedContacts: [],
     selectedContacts: [],
-    messageContent: ''
+    messageContent: '',
+    messagePresets: [] // 消息预设列表
   }
 }

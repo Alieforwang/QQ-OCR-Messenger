@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { createAppState, STEPS } from '@/types'
+import { createAppState, createMessagePreset, STEPS, MESSAGE_TYPES } from '@/types'
 import ocrService from '@/services/ocrService'
 import napCatService from '@/services/napCatService'
 import fuzzyMatcher from '@/services/fuzzyMatcher'
@@ -245,7 +245,7 @@ export const useAppStore = defineStore('app', {
         // 处理好友私聊
         friendContacts.forEach(contact => {
           messages.push({
-            type: 'private',
+            type: MESSAGE_TYPES.PRIVATE,
             target_id: contact.contact.user_id,
             message: this.messageContent
           })
@@ -257,7 +257,7 @@ export const useAppStore = defineStore('app', {
           const groupId = contact.group_id
           if (!groupMessages.has(groupId)) {
             groupMessages.set(groupId, {
-              type: 'group',
+              type: MESSAGE_TYPES.GROUP,
               target_id: groupId,
               message: this.messageContent,
               at_users: []
@@ -357,6 +357,76 @@ export const useAppStore = defineStore('app', {
         totalFriends: friends.length,
         totalGroups: Object.keys(groupedMembers).length,
         totalGroupMembers: groupMembers.length
+      }
+    },
+
+    // 预设管理
+    saveMessagePreset(name, content = null) {
+      const messageText = content || this.messageContent
+      if (!messageText.trim()) {
+        throw new Error('消息内容不能为空')
+      }
+
+      const preset = createMessagePreset(
+        Date.now().toString(),
+        name,
+        messageText.trim(),
+        new Date()
+      )
+
+      this.messagePresets.unshift(preset)
+      this.savePresetsToStorage()
+      return preset
+    },
+
+    loadMessagePreset(presetId) {
+      const preset = this.messagePresets.find(p => p.id === presetId)
+      if (preset) {
+        this.messageContent = preset.content
+        preset.usageCount++
+        this.savePresetsToStorage()
+        return preset
+      }
+      throw new Error('预设不存在')
+    },
+
+    deleteMessagePreset(presetId) {
+      const index = this.messagePresets.findIndex(p => p.id === presetId)
+      if (index > -1) {
+        this.messagePresets.splice(index, 1)
+        this.savePresetsToStorage()
+        return true
+      }
+      return false
+    },
+
+    updateMessagePreset(presetId, updates) {
+      const preset = this.messagePresets.find(p => p.id === presetId)
+      if (preset) {
+        Object.assign(preset, updates)
+        this.savePresetsToStorage()
+        return preset
+      }
+      throw new Error('预设不存在')
+    },
+
+    savePresetsToStorage() {
+      try {
+        localStorage.setItem('messagePresets', JSON.stringify(this.messagePresets))
+      } catch (error) {
+        console.warn('保存预设失败:', error)
+      }
+    },
+
+    loadPresetsFromStorage() {
+      try {
+        const stored = localStorage.getItem('messagePresets')
+        if (stored) {
+          this.messagePresets = JSON.parse(stored)
+        }
+      } catch (error) {
+        console.warn('加载预设失败:', error)
+        this.messagePresets = []
       }
     }
   }
