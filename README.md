@@ -208,6 +208,17 @@ A: 请确认：
 
 本项目采用 MIT 许可证。详见 [LICENSE](LICENSE) 文件。
 
+## 🙏 致谢
+
+本项目的实现离不开以下优秀的开源项目：
+
+- **[Umi-OCR](https://github.com/hiroi-sora/Umi-OCR)** - 强大的离线OCR文字识别工具，为本项目提供了可靠的图像文字识别服务
+- **[NapCatQQ](https://github.com/NapNeko/NapCatQQ)** - 现代化的无头QQ机器人框架，基于OneBot 11标准，为本项目提供了QQ消息发送能力
+
+**重要声明**：本项目未对 [NapCatQQ](https://github.com/NapNeko/NapCatQQ) 和 [Umi-OCR](https://github.com/hiroi-sora/Umi-OCR) 的代码进行任何修改，仅通过标准API接口调用其提供的服务。本项目是一个独立的前端应用，作为这些服务的客户端使用。
+
+感谢这些项目的开发者们为开源社区做出的贡献！
+
 ## 🤝 贡献
 
 欢迎提交Issue和Pull Request来改进项目！
