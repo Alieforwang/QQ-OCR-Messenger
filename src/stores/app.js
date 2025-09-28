@@ -135,6 +135,7 @@ export const useAppStore = defineStore('app', {
         ])
 
         this.contacts = friends
+        this.groups = groups
 
         // 加载所有群的成员列表
         if (groups.length > 0) {
@@ -159,14 +160,19 @@ export const useAppStore = defineStore('app', {
       this.setLoading(true)
       try {
         // 如果联系人数据为空，先加载
-        if (this.contacts.length === 0 && Object.keys(this.groupMembers).length === 0) {
+        if (this.contacts.length === 0 || this.groups.length === 0 || Object.keys(this.groupMembers).length === 0) {
           await this.loadContacts()
         }
 
         // 创建群信息映射
         const groupInfo = {}
         Object.keys(this.groupMembers).forEach(groupId => {
-          groupInfo[groupId] = { group_name: `群${groupId}` }
+          const group = this.groups.find(g => g.group_id === groupId)
+          groupInfo[groupId] = {
+            group_name: group?.group_name || `群${groupId}`,
+            group_id: groupId,
+            member_count: group?.member_count || 0
+          }
         })
 
         // 执行模糊匹配
@@ -325,6 +331,33 @@ export const useAppStore = defineStore('app', {
     // 获取匹配统计信息
     getMatchingStats() {
       return fuzzyMatcher.getMatchStats(this.matchedContacts)
+    },
+
+    // 获取分组后的匹配联系人
+    getGroupedMatches() {
+      const friends = this.matchedContacts.filter(m => m.type === 'friend')
+      const groupMembers = this.matchedContacts.filter(m => m.type === 'group_member')
+
+      // 按群分组群成员
+      const groupedMembers = {}
+      groupMembers.forEach(member => {
+        if (!groupedMembers[member.group_id]) {
+          groupedMembers[member.group_id] = {
+            group_name: member.group_name,
+            group_id: member.group_id,
+            members: []
+          }
+        }
+        groupedMembers[member.group_id].members.push(member)
+      })
+
+      return {
+        friends,
+        groups: Object.values(groupedMembers),
+        totalFriends: friends.length,
+        totalGroups: Object.keys(groupedMembers).length,
+        totalGroupMembers: groupMembers.length
+      }
     }
   }
 })

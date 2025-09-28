@@ -117,6 +117,7 @@
               v-model:selected-contacts="selectedContacts"
               v-model:message-content="messageContent"
               :is-sending="loading"
+              :groups="groups"
               @back="goToStep(3)"
               @send="sendMessages"
               @success="handleSendSuccess"
@@ -272,6 +273,7 @@ const uploadedImage = computed(() => appStore.uploadedImage)
 const ocrResults = computed(() => appStore.ocrResults)
 const extractedNames = computed(() => appStore.extractedNames)
 const matchedContacts = computed(() => appStore.matchedContacts)
+const groups = computed(() => appStore.groups)
 const selectedContacts = computed({
   get: () => appStore.selectedContacts,
   set: (value) => appStore.selectedContacts = value

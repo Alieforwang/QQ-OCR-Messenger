@@ -83,7 +83,19 @@
           </el-tab-pane>
 
           <el-tab-pane label="群聊" name="groups">
-            <div class="group-recipients">
+            <!-- 群消息选项 -->
+            <div class="group-options">
+              <el-radio-group v-model="groupMessageMode" @change="handleGroupModeChange">
+                <el-radio value="at" label="at">@指定成员</el-radio>
+                <el-radio value="normal" label="normal">普通群消息</el-radio>
+              </el-radio-group>
+              <el-text type="info" size="small">
+                {{ groupMessageMode === 'at' ? '将@选中的群成员' : '发送普通群消息，不@任何人' }}
+              </el-text>
+            </div>
+
+            <!-- @成员模式：显示选中的群成员 -->
+            <div v-if="groupMessageMode === 'at'" class="group-recipients">
               <div
                 v-for="(members, groupId) in groupedContacts"
                 :key="groupId"
@@ -115,6 +127,35 @@
                       @click="removeRecipient(contact)"
                     />
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 普通群消息模式：显示可选的群列表 -->
+            <div v-else class="group-list">
+              <el-text type="info" class="group-hint">
+                选择要发送消息的群：
+              </el-text>
+              <div class="available-groups">
+                <div
+                  v-for="group in availableGroups"
+                  :key="group.group_id"
+                  class="group-item"
+                  :class="{ selected: isGroupSelected(group.group_id) }"
+                  @click="toggleGroup(group)"
+                >
+                  <el-avatar
+                    :size="32"
+                    :icon="UserFilled"
+                  />
+                  <div class="group-info">
+                    <div class="group-name">{{ group.group_name }}</div>
+                    <div class="group-stats">{{ group.member_count }} 人</div>
+                  </div>
+                  <el-checkbox
+                    :model-value="isGroupSelected(group.group_id)"
+                    @change="toggleGroup(group)"
+                  />
                 </div>
               </div>
             </div>
@@ -344,6 +385,10 @@ const props = defineProps({
   isSending: {
     type: Boolean,
     default: false
+  },
+  groups: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -357,6 +402,8 @@ const emit = defineEmits([
 // 响应式数据
 const activeTab = ref('all')
 const sendImmediately = ref(true)
+const groupMessageMode = ref('at') // 'at' 或 'normal'
+const selectedGroups = ref([]) // 普通群消息模式下选中的群
 const confirmBeforeSend = ref(false)
 const resultDialogVisible = ref(false)
 const sendResults = ref(null)
@@ -384,9 +431,22 @@ const groupedContacts = computed(() => {
 })
 
 const canSend = computed(() => {
-  return props.selectedContacts.length > 0 &&
-         props.messageContent.trim().length > 0 &&
-         !props.isSending
+  if (groupMessageMode.value === 'normal') {
+    // 普通群消息模式：需要选择群和消息内容
+    return selectedGroups.value.length > 0 &&
+           props.messageContent.trim().length > 0 &&
+           !props.isSending
+  } else {
+    // @成员模式：需要选择联系人和消息内容
+    return props.selectedContacts.length > 0 &&
+           props.messageContent.trim().length > 0 &&
+           !props.isSending
+  }
+})
+
+// 获取可用的群列表（用于普通群消息模式）
+const availableGroups = computed(() => {
+  return props.groups || []
 })
 
 const successResults = computed(() => {
@@ -413,6 +473,32 @@ const removeRecipient = (contactToRemove) => {
   )
   emit('update:selectedContacts', newSelection)
   ElMessage.success('已移除联系人')
+}
+
+// 群消息模式切换
+const handleGroupModeChange = (mode) => {
+  if (mode === 'normal') {
+    // 切换到普通群消息模式，清空选中的群成员
+    selectedGroups.value = []
+  } else {
+    // 切换到@成员模式，清空选中的群
+    selectedGroups.value = []
+  }
+}
+
+// 检查群是否被选中
+const isGroupSelected = (groupId) => {
+  return selectedGroups.value.some(g => g.group_id === groupId)
+}
+
+// 切换群选择状态
+const toggleGroup = (group) => {
+  const index = selectedGroups.value.findIndex(g => g.group_id === group.group_id)
+  if (index > -1) {
+    selectedGroups.value.splice(index, 1)
+  } else {
+    selectedGroups.value.push(group)
+  }
 }
 
 const getResultTargetName = (message) => {
@@ -793,5 +879,74 @@ defineExpose({
   .actions-bar .el-button {
     width: 100%;
   }
+}
+
+/* 群选择相关样式 */
+.group-options {
+  padding: 16px;
+  background: var(--gray-50);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.group-options .el-radio-group {
+  margin-bottom: 8px;
+}
+
+.group-list {
+  padding: 16px;
+}
+
+.group-hint {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.available-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.group-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 2px solid var(--gray-200);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--white);
+}
+
+.group-item:hover {
+  border-color: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.15);
+}
+
+.group-item.selected {
+  border-color: var(--primary-color);
+  background: var(--primary-light);
+}
+
+.group-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.group-info .group-name {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.group-info .group-stats {
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 </style>

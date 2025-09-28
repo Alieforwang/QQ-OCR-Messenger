@@ -125,6 +125,7 @@ export function createAppState() {
     ocrResults: [],
     extractedNames: [],
     contacts: [],
+    groups: [],
     groupMembers: {},
     matchedContacts: [],
     selectedContacts: [],
